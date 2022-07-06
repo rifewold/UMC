@@ -1,5 +1,8 @@
 # 30/10/20, DHC
 
+usethis::create_github_token()
+
+gitcreds::gitcreds_set()
 
 # Hola! esta es una modificacion de prueba!
 
