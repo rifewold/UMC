@@ -1,8 +1,8 @@
 # 30/10/20, DHC
 
-usethis::create_github_token()
+#usethis::create_github_token()
 
-gitcreds::gitcreds_set()
+#gitcreds::gitcreds_set()
 
 # Hola! esta es una modificacion de prueba!
 
@@ -37,8 +37,10 @@ pega_lista <- function(data, nc){
 }
 
 #ejemplo:
-#ejem <- list(hom = data.frame(v = 1:3), muj = data.frame(v = 4:6))
-#pega_lista(ejem, "nombre")
+ejem <- list(hom = data.frame(v = 1:3), muj = data.frame(v = 4:6))
+pega_lista(ejem, "nombre")
+
+bind_rows(ejem, .id = "nombre")
 
 #******************************************************************************************************
 #tabla_freq1
