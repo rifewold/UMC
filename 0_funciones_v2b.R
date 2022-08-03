@@ -188,8 +188,9 @@ cfa_lavaan <- function(data, nomvar, puntajes = TRUE){
     mutate(stars = case_when(
       pvalue < 0.001 ~ "***", pvalue < 0.01 ~ "**", pvalue < 0.05 ~ "*", TRUE ~ "")) %>%
     select(Item = rhs, B = est, SE = se, Beta = std.all, sig. = stars) %>%
-    mutate(across(where(is.numeric), round, 3)) %>%
-    mutate(across(where(is.numeric), format, decimal.mark = ","))
+    mutate(across(where(is.numeric), round, 3))
+  # %>%
+  #   mutate(across(where(is.numeric), format, decimal.mark = ","))
 
   #indicadores de ajuste
   indicadores <-
@@ -198,8 +199,9 @@ cfa_lavaan <- function(data, nomvar, puntajes = TRUE){
     rownames_to_column("Indicadores") %>%
     rename(Valores = 2)
 
-  indicadores1 <- mutate(indicadores,
-                         across(where(is.numeric), format, decimal.mark = ","))
+  indicadores1 <- indicadores
+    # mutate(indicadores,
+    #                      across(where(is.numeric), format, decimal.mark = ","))
 
   ajuste <-
   indicadores[1,2] > 0.9 & indicadores[2,2] <= 0.1 &

@@ -7,6 +7,7 @@ library(lavaan)
 library(here)
 library(googlesheets4)
 library(rio)
+library(semTools)
 
 source(here("0-funciones-nuevas.R"))
 invertir <- function(x, i) i+1 - x #para invertir
@@ -64,6 +65,13 @@ identical(names(matriz_lista), names(lista)) #exactamente mismos elementos
 #para guardar
 indicad1 <- NULL; carga1 <- NULL
 indicad1_pca <- NULL; carga1_pca <- NULL
+confi1_cfa <- NULL; confi2_cfa <- NULL
+
+indicad2 <- NULL; carga2 <- NULL
+indicad2_pca <- NULL; carga2_pca <- NULL
+confi1_pca <- NULL; confi2_pca <- NULL
+
+invarianza2 <- NULL
 
 nom <- names(matriz_lista) #para filtrar
 # lista <- map(lista, ~rowid_to_column(.x, "id")) #agregar id a las bases
@@ -88,7 +96,7 @@ warn <- map(lista, function(x) NULL)
 
     # tdesci <- tdesc[which(tdesc$Concatena1 == nom[i]), ] #descriptivos
 
-    for(j in 1:length(vcod_indice)){ #j=2
+    for(j in 1:length(vcod_indice)){ #j=3
 
       #Rutina para la escala 'j' de la base 'i'
       escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
@@ -97,8 +105,8 @@ warn <- map(lista, function(x) NULL)
       elim_opc <- unique(escala_j$OpcionE)
       constructo_j <- unique(escala_j$Constructo)
       cod_constructo <- unique(escala_j$Cod_indice)
-
-      bd1 <- bd[c("id", preg$cod_preg)] #base con id para pegar los puntajes a la base
+      variables <- c("id","estrato") #le añadi esta variable para que pueda identificar cuales serían las columnas que añadiríamos a la base (además del ID)
+      bd1 <- bd[c(variables,preg$cod_preg)] #base con id para pegar los puntajes a la base
 
       bd2 <- bd1 %>%
         #identificar observaciones con mas de 25% de missing y retirarlas
@@ -114,7 +122,7 @@ warn <- map(lista, function(x) NULL)
       #para invertir
       if(any(!is.na(escala_j$Invertir))){
         items_invertir <- filter(escala_j, Invertir == "Invertir")$cod_preg
-        bd3 <- mutate(bd3, across(all_of(items_invertir), ~invertir(.x, max(bd3[-1]))))
+        bd3 <- mutate(bd3, across(all_of(items_invertir), ~invertir(.x, max(select(bd3,-variables)))))
       }
 
       #para eliminar la opcion que no entra al modelo
@@ -139,10 +147,66 @@ warn <- map(lista, function(x) NULL)
       }else{mm=NULL}
 
       #reporte insumos aplica cfa o pca segun tipo[j]
-      resultados1 <- reporte_insumos(bd3[-1], tipo = tipo[j], model_lavaan = mm, puntajes = quieres_puntajes)
+      resultados1 <- reporte_insumos(select(bd3,-variables), tipo = tipo[j], model_lavaan = mm, puntajes = quieres_puntajes)
 
-      # mm <- cfa(mm, data = bd3[-1], ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
+      if(tipo[j] == "PCA"){ #Si se quiere PCA
+        if(resultados1$indicadores<50){ #Si no cumple esta primera condición, ya no pasa por el repeat
+          bd4=bd3
+          resultados2=resultados1
+        repeat{
+          if(length(names(bd4[-1]))<=4){break}
+          if(resultados2$indicadores<50){
+            if(length(resultados2$cargas %>%  filter(abs(Cargas)<0.4) %>% select(Item) %>% pull())==0){
+              eliminar=resultados2$cargas %>%  filter(Cargas==min(abs(Cargas))) %>% select(Cargas) %>% pull()
+            }else{
+              eliminar=resultados2$cargas %>%  filter(abs(Cargas)<0.4) %>% select(Item) %>% pull()
+            }
+            bd4=bd4 %>% select(!eliminar)
+            resultados2 <- reporte_insumos(select(bd4,-variables), tipo = tipo[j], model_lavaan = mm, puntajes = quieres_puntajes)
+          }else{break}
+        }
+        }else{resultados2=NULL}
+      }else{#Si se quiere CFA de uno o dos niveles
+        if(resultados1$indicadores[1,2]<0.95|resultados1$indicadores[2,2]<0.95|resultados1$indicadores[3,2]>0.10|resultados1$indicadores[4,2]>0.10){ #Si no cumple esta primera condición, ya no pasa por el repeat
+        resultados2=resultados1
+        preg2=preg
+        repeat{
+          if(length(preg2$cod_preg)<=4){break}
+          if(resultados2$indicadores[1,2]<0.95|resultados2$indicadores[2,2]<0.95|resultados2$indicadores[3,2]>0.10|resultados2$indicadores[4,2]>0.10){
 
+            if(length(resultados2$cargas %>%  filter(Est<0.4) %>% select(Item) %>% pull())==0){
+              eliminar=resultados2$cargas %>%  filter(Est==min(Est)) %>% select(Item) %>% pull()
+            }else{
+              eliminar=resultados2$cargas %>%  filter(Est<0.4) %>% select(Item) %>% pull()
+            }
+
+            preg2=preg2 %>% filter(!cod_preg %in% all_of(eliminar))
+
+            if(tipo[j] == "CFA"){
+              if(length(unique(preg2$Cod_indice2)) == 1){
+                mm <- paste(unique(preg2$Cod_indice),
+                            paste(preg2$cod_preg, collapse = '+'), sep = '=~')
+              }else{
+                mm <- split(preg2, preg2$Cod_indice2) %>%
+                  map(~paste(pull(.x, cod_preg), collapse = "+")) %>%
+                  imap(~paste(.y, .x, sep = '=~')) %>%
+                  paste(collapse = "\n")
+                constructo_j <- unique(escala_j$sub_escala)
+                cod_constructo <- unique(escala_j$Cod_indice2)
+              }
+            }else{mm=NULL}
+            resultados2 <- reporte_insumos(select(bd3,-variables), tipo = tipo[j],model_lavaan = mm, puntajes = quieres_puntajes)
+          }else{break}
+        }
+        }else{resultados2=NULL}
+      }
+
+      #Saco invarianza
+      if(tipo[j] == "CFA"){
+      if(is.null(resultados2)){
+        resultados1$invarianza=invarianza1(mm,bd3,"estrato")
+      }else{resultados2$invarianza=invarianza1(mm,bd3,"estrato")}
+      }
 
       #para identificar los warnings
       # warn[[i]][[vcod_indice[j]]]  <-
@@ -171,8 +235,14 @@ warn <- map(lista, function(x) NULL)
       #   pivot_wider(names_from = opcion, values_from = prop)
 
       #guardamos los insumos
-      ins[[i]][[vcod_indice[j]]] <- list(#tabla_desc,
-                                         resultados1$cargas, resultados1$indicadores)
+      if(is.null(resultados2)){
+        ins[[i]][[vcod_indice[j]]] <- list(resultado_inicial=list(resultados1$cargas, resultados1$indicadores, resultados1$confiabilidad))
+      }else{
+        ins[[i]][[vcod_indice[j]]] <- list(resultado_inicial=list(resultados1$cargas, resultados1$indicadores, resultados1$confiabilidad),
+                                           resultado_recomendado=list(resultados2$cargas, resultados2$indicadores, resultados2$confiabilidad))
+      }
+
+
 
       if(quieres_excel == TRUE){
         # PARA EL EXCEL ****************************************************************************************
@@ -197,6 +267,48 @@ warn <- map(lista, function(x) NULL)
 
           carga1 <- bind_rows(carga1, para_pegar_cargas) #generamos la tabla
 
+          #Confiabilidad *****
+          confi <- resultados1$confiabilidad %>% pivot_longer(cols = -estadistico,
+                                                              names_to = "constructos",
+                                                              values_to = "valores") %>%
+            mutate(Base = nom[i]) %>% filter(str_detect(estadistico,"omega"))
+
+          confi1_cfa <- bind_rows(confi1_cfa, confi) #generamos la tabla
+
+          if(is.null(resultados2)){confi2_cfa <- bind_rows(confi2_cfa)} #Si no tienen una versión optimizada, se queda como estaba
+          else{#De las versiones optimizadas
+          #indicadores de ajuste *****
+          para_pegar_indica <- resultados2$indicadores %>%
+            select(-3) %>%
+            pivot_wider(names_from = Indicadores, values_from = Valores) %>%
+            mutate(Variable = vcod_indice[j],
+                   Constructo = str_flatten(constructo_j,"-"),
+                   Base = nom[i]) %>%
+            select(Base, Constructo, Variable, everything())
+
+          indicad2 <- bind_rows(indicad2, para_pegar_indica) #generamos la tabla
+
+          #cargas factoriales *****
+          para_pegar_cargas <- resultados2$cargas %>%
+            mutate(Base = nom[i]) %>%
+            left_join(., enunciado, by = c("Item" = "cod_preg")) %>%
+            select(Base, Variable = Escala, Item, Enunciado, Est, SE, sig.)
+
+          carga2 <- bind_rows(carga2, para_pegar_cargas) #generamos la tabla
+
+          #Confiabilidad *****
+          confi <- resultados2$confiabilidad %>% pivot_longer(cols = -estadistico,
+                                                                          names_to = "constructos",
+                                                                          values_to = "valores") %>%
+            mutate(Base = nom[i]) %>% filter(str_detect(estadistico,"omega"))
+
+          confi2_cfa <- bind_rows(confi2_cfa, confi) #generamos la tabla
+          }
+
+          #Saco invarianza
+          invarianza=invarianza1(mm,bd3,"estrato") %>% mutate(Variable = vcod_indice[j], Base = nom[i])
+          invarianza2=bind_rows(invarianza2,invarianza)
+
         }else{
           para_pegar_indica_pca <- data.frame(
             Variable = vcod_indice[j],
@@ -214,8 +326,46 @@ warn <- map(lista, function(x) NULL)
             select(Base, Variable, Enunciado, everything())
 
           carga1_pca <- bind_rows(carga1_pca, para_pegar_cargas_pca) #generamos la tabla
+
+          para_pegar_confi <- data.frame(
+            Variable = vcod_indice[j],
+            Constructo = constructo_j,
+            Base = nom[i],
+            confiabilidad_alpha_ord = resultados1$confiabilidad)
+
+          confi1_pca <- bind_rows(confi1_pca, para_pegar_confi) #generamos la tabla
+
+          if(is.null(resultados2)){confi2_pca <- bind_rows(confi2_pca)}else{#De las versiones optimizadas
+          para_pegar_indica_pca <- data.frame(
+            Variable = vcod_indice[j],
+            Constructo = constructo_j,
+            Base = nom[i],
+            Varianza_explicada = resultados2$indicadores) %>%
+            select(Base, Constructo, Variable, everything())
+
+          indicad2_pca <- bind_rows(indicad2_pca, para_pegar_indica_pca) #generamos la tabla
+
+          para_pegar_cargas_pca <- resultados2$cargas %>%
+            select(Item, Cargas) %>%
+            mutate(Variable = vcod_indice[j], Base = nom[i]) %>%
+            left_join(.,enunciado,by=c("Item"="cod_preg")) %>%
+            select(Base, Variable, Enunciado, everything())
+
+          carga2_pca <- bind_rows(carga2_pca, para_pegar_cargas_pca) #generamos la tabla
+
+          para_pegar_confi <- data.frame(
+            Variable = vcod_indice[j],
+            Constructo = constructo_j,
+            Base = nom[i],
+            confiabilidad_alpha_ord = resultados2$confiabilidad)
+
+          confi2_pca <- bind_rows(confi2_pca, para_pegar_confi) #generamos la tabla
+          }
+
+
         }
-        #*******************************************************************************************************
+
+
       }
       #Sys.sleep(1)
     }
@@ -272,17 +422,19 @@ text_por_escala <- matriz1 %>%
   select(Concatena1, Cod_indice, Analisis2, texto, tit_escala, encab_cuest, nfac, Instrumento)
 #
 insumos2 <- list(insumos = ins, tipo = cod_tipo, textos = text_por_escala)
-save(insumos2, file = here("3-reportes", "2-psicometricos", "0-ins-reporte.Rdata")) #guardamos
+save(insumos2, file = here("0-ins-reporte.Rdata")) #guardamos
 
 
 # dd <- format(Sys.Date(), "%d%m%y")
 #format(Sys.time(), "%H:%M")
 
-export(list("CFA_indicadores de ajuste" = indicad1,
-            "CFA_cargas factoriales" = carga1,
-            "PCA_indicadores" = indicad1_pca,
-            "PCA_cargas" = carga1_pca),
-       here("3-reportes", "2-psicometricos", "0-indicadores-ffaa3.xlsx"))
+export(list("CFA_indicadores de ajuste" = indicad1,"CFA_indicadores de ajuste_modif" = indicad2,
+            "CFA_cargas factoriales" = carga1,"CFA_cargas factoriales_modif" = carga2,
+            "CFA_confiabilidad" = confi1_cfa,"CFA_confiabilidad_modif" = confi2_cfa,
+            "PCA_indicadores" = indicad1_pca,"PCA_indicadores_modif" = indicad2_pca,
+            "PCA_cargas" = carga1_pca,"PCA_cargas_modif" = carga2_pca,
+            "PCA_confiabilidad" = confi1_pca,"PCA_confiabilidad_modif" = confi2_pca,"invarianza"=invarianza2),
+       here("0-indicadores-ffaa3.xlsx"))
 
 
 #*****************************************
