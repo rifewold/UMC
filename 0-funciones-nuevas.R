@@ -205,22 +205,24 @@ reporte_lavaan <- function(model_cfa_lavaan, puntajes = TRUE){
   m <- m[c("lhs", "rhs", "est.std", "se", "stars")]
   m <- setNames(m, c("Escala", "Item", "Est", "SE", "sig."))
   vredo <- c("Est", "SE") #para redondear
-  m[vredo] <- apply(m[vredo], 2, function(x) format(round(x, 3), decimal.mark = ","))
+  # m[vredo] <- apply(m[vredo], 2, function(x) format(round(x, 3), decimal.mark = ","))
 
   #indicadores de ajuste
-  fit1 <- round(lavaan::fitmeasures(model_cfa_lavaan,
-                                    c("cfi", "tli", "srmr", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper")), 4)
+  fit1 <- lavaan::fitmeasures(model_cfa_lavaan,
+                                    c("cfi", "tli", "srmr", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper"))
   indicadores1 <- data.frame(Indicadores = names(fit1)[1:4], Valores = unclass(fit1)[1:4], row.names = NULL)
   indicadores1 <- within(indicadores1, {'IC al 90%' =
     ifelse(Indicadores == "rmsea",  paste0("[", round(fit1[5], 3), "-", round(fit1[6], 3), "]"), "")})
+
+  confiabilidad<-data.frame(reliability(model_cfa_lavaan),estadistico=row.names(reliability(model_cfa_lavaan))) #le añadi la confiabilidad
 
   if(puntajes == TRUE){
     puntajes1 <- as.data.frame(lavaan::lavPredict(model_cfa_lavaan))
   }
 
   if(puntajes == TRUE){
-    return(list(cargas = m, indicadores = indicadores1, puntajes = puntajes1))}
-  else {return(list(cargas = m, indicadores = indicadores1))}
+    return(list(cargas = m, indicadores = indicadores1,confiabilidad=confiabilidad, puntajes = puntajes1))}
+  else {return(list(cargas = m, indicadores = indicadores1,confiabilidad=confiabilidad))}
 
 }
 
@@ -236,6 +238,39 @@ reporte_lavaan <- function(model_cfa_lavaan, puntajes = TRUE){
 #
 # paste0("[", fit1[5], "-", fit1[6], "]")
 
+#**************************************
+
+
+invarianza1 <- function(m, data, grupo){
+
+  #m = string del modelo, "constructo=~item1+item2+..."
+  #data = base de datos
+  #grupo = grupo, "gestion2", "area", "sexo" o también puede ser c("gestion2","area)
+
+  cfa_WLS <- function(...) cfa(estimator = "WLSMV", ...)
+
+  m_pool <- map(grupo,~cfa_WLS(mm, data)) %>% set_names(grupo)
+  m_conf <- map(grupo,~cfa_WLS(mm, data, group = .x)) %>% set_names(grupo)
+  m_metr <- map(grupo,~cfa_WLS(mm, data, group = .x, group.equal = c("loadings"))) %>% set_names(grupo)
+  m_esca <- map(grupo,~cfa_WLS(mm, data, group = .x, group.equal = c("loadings", "intercepts"))) %>% set_names(grupo)
+
+  map_df(lst(m_pool,m_conf, m_metr, m_esca),
+         function(x) map_df(x,~fitMeasures(.x, c("cfi","tli","rmsea","srmr")),.id="grupo"),.id="tip_inv") %>%
+    as_tibble() %>%
+    mutate(across(c(cfi:srmr),~round(as.numeric(.),4))) %>%
+    pivot_longer(cols=c(cfi:srmr),names_to="indicadores",values_to="val") %>%
+    pivot_wider(names_from =tip_inv,values_from = "val") %>%
+    mutate(inv_metr = abs(round(m_metr - m_conf , 3)),
+           inv_sca = abs(round(m_metr - m_esca, 3))) %>%
+    mutate(inv_metr_t = case_when(
+      indicadores %in% c("cfi", "tli") & inv_metr <= 0.020 ~ "cumple",
+      indicadores %in% c("rmsea", "srmr") & inv_metr <= 0.030 ~ "cumple",
+      TRUE~"no cumple"),
+      inv_sca_t = case_when(
+        indicadores %in% c("cfi", "tli") & inv_sca <= 0.020 ~ "cumple",
+        indicadores %in% c("rmsea", "srmr") & inv_sca <= 0.010 ~ "cumple",
+        TRUE~"no cumple"))
+}
 
 
 #***************************************************************************************
@@ -257,10 +292,12 @@ pca_umc_reporte <- function(x, corr = NULL, puntajes = TRUE){
   if(is.null(corr)){
     val <- eigen(cor(x))$values #autovalores
     t_vec <- t(eigen(cor(x))$vectors) # transpuesta de autovectores
+
   }else{
     cor_pol <- psych::polychoric(x)$rho
     val <- eigen(cor_pol)$values #autovalores
     t_vec <- t(eigen(cor_pol)$vectors) # transpuesta de autovectores
+    confiabilidad <- (alpha(psych::polychoric(x)$rho))$feldt$alpha #Confiabilidad
   }
 
   media_x <- colMeans(x)
@@ -284,13 +321,13 @@ pca_umc_reporte <- function(x, corr = NULL, puntajes = TRUE){
 
   cargas <- data.frame(Item = names(x), Pesos = peso_x[1, ], Cargas = cargas_x[1, ])
   vr <- c("Pesos", "Cargas")
-  cargas[vr] <- apply(cargas[vr], 2, function(x) format(round(x, 3), decimal.mark = ","))
-  varex <- format(round(val[1]/sum(val)*100, 2), decimal.mark = ",")
+  cargas[vr] <- apply(cargas[vr], 2, function(x) round(x, 3))
+  varex <- round(val[1]/sum(val)*100, 2)
 
   if(puntajes == TRUE){
-    return(list(puntajes = indice1, indicadores = varex, cargas = cargas))}
+    return(list(puntajes = indice1, indicadores = varex, cargas = cargas, confiabilidad = confiabilidad))}
   else {
-    return(list(indicadores = varex, cargas = cargas))}
+    return(list(indicadores = varex, cargas = cargas, confiabilidad = confiabilidad))}
 
 }
 

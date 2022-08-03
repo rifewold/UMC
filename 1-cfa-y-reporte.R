@@ -8,18 +8,18 @@ library(here)
 library(googlesheets4)
 library(rio)
 
-source(here("0-insumos", "0-funciones-nuevas.R"))
+source(here("0-funciones-nuevas.R"))
 invertir <- function(x, i) i+1 - x #para invertir
 
 #cargamos resultados descriptivos
-load(here("3-reportes", "1-descriptivos", "2-con-pesos", "01-descriptivos-ffaa-pesos.Rdata"))
-tdesc <- tabla3[which(tabla3$estrato == "General"), ]
-tdesc <- mutate(tdesc, prop = round(prop, 1)) #redondeamos
+# load(here("3-reportes", "1-descriptivos", "2-con-pesos", "01-descriptivos-ffaa-pesos.Rdata"))
+# tdesc <- tabla3[which(tabla3$estrato == "General"), ]
+# tdesc <- mutate(tdesc, prop = round(prop, 1)) #redondeamos
 
 # Generar excel con los indicadores de ajuste y las cargas factoriales #
 
 # (0) importamos bases de datos ----
-lista = rio::import_list(Sys.glob(here("1-bases", "1-ffaa", "2-para-usar", "*.sav")), setclass = "tibble") %>%
+lista = rio::import_list(Sys.glob(here("Bases ejemplo", "*.sav")), setclass = "tibble") %>%
   map(.,~rio::factorize(.))
 
 # quitar posprueba 6P y 2S ise pp
@@ -27,8 +27,8 @@ lista <- discard(lista, str_detect(names(lista), "ISE|6Pestudiante_EBR_PP"))
 
 #acomodaciones
 #colapsar opciones 'Regularmente' y 'Siempre' en la pregunta p20
-lista$EVA2021_2Sdirector_EBRG2 <- lista$EVA2021_2Sdirector_EBRG2 %>%
-  mutate(across(starts_with("p20"), ~fct_recode(.x, "Regularmente" = "Siempre")))
+# lista$EVA2021_2Sdirector_EBRG2 <- lista$EVA2021_2Sdirector_EBRG2 %>%
+#   mutate(across(starts_with("p20"), ~fct_recode(.x, "Regularmente" = "Siempre")))
 
 # names(lista)
 # bdlistos <- c("EVA2021_2Sestudiante_EBRG1", "EVA2021_6Pestudiante_EBR", "EVA2021_6Pfamilia_EBR",
@@ -37,14 +37,14 @@ lista$EVA2021_2Sdirector_EBRG2 <- lista$EVA2021_2Sdirector_EBRG2 %>%
 #
 # lista <- keep(lista, names(lista) %in% bdlistos)
 
-vv <- c("EVA2021_2Sestudiante_EBRG2")
+# vv <- c("EVA2021_2Sestudiante_EBRG2")
 #vv <- c("EVA2021_2Pfamilia_EBR")
 # b <- names(lista)[str_detect(names(lista), "EVA2021_6Pestudiante_EBR")]
 # lista <- keep(lista, names(lista) %in% b)
 
 #cargamos matriz
-matriz <- read_sheet("https://docs.google.com/spreadsheets/d/1Ur2phcc84D72tlUw44nhnOYed48BMb2cwyw3jwJzntc/edit#gid=341416768")
-
+# matriz <- read_sheet("https://docs.google.com/spreadsheets/d/1Ur2phcc84D72tlUw44nhnOYed48BMb2cwyw3jwJzntc/edit#gid=341416768")
+matriz <- import(here("Bases ejemplo","MIAU2021.xlsx"))
 #nos quedamos con la info asociada a cfa, pca
 matriz1 <- filter(matriz, Analisis2 %in% c("CFA", "PCA")) %>%
   rename(Constructo = Constructo_indicador)
@@ -66,7 +66,7 @@ indicad1 <- NULL; carga1 <- NULL
 indicad1_pca <- NULL; carga1_pca <- NULL
 
 nom <- names(matriz_lista) #para filtrar
-lista <- map(lista, ~rowid_to_column(.x, "id")) #agregar id a las bases
+# lista <- map(lista, ~rowid_to_column(.x, "id")) #agregar id a las bases
 
 quieres_puntajes <- FALSE #(!) IMPORTANTE: si es TRUE genera puntaje, si es FALSE nop
 quieres_excel <- TRUE
@@ -76,7 +76,7 @@ warn <- map(lista, function(x) NULL)
 
 {
   inicio <- Sys.time()
-  for(i in 1:length(nom)){ #i=8
+  for(i in 1:length(nom)){ #i=1
 
     #Preparamos los insumos/variables para la rutina de la base/cuestionario 'i'
     matriz_i <- select(matriz_lista[[nom[i]]], starts_with(c("cod", "Cod")), Analisis2, Invertir,
@@ -86,9 +86,9 @@ warn <- map(lista, function(x) NULL)
 
     bd <- lista[[nom[i]]] #tomamos la base i
 
-    tdesci <- tdesc[which(tdesc$Concatena1 == nom[i]), ] #descriptivos
+    # tdesci <- tdesc[which(tdesc$Concatena1 == nom[i]), ] #descriptivos
 
-    for(j in 1:length(vcod_indice)){ #j=4
+    for(j in 1:length(vcod_indice)){ #j=2
 
       #Rutina para la escala 'j' de la base 'i'
       escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
@@ -136,14 +136,13 @@ warn <- map(lista, function(x) NULL)
           constructo_j <- unique(escala_j$sub_escala)
           cod_constructo <- unique(escala_j$Cod_indice2)
         }
-      }
+      }else{mm=NULL}
 
       #reporte insumos aplica cfa o pca segun tipo[j]
       resultados1 <- reporte_insumos(bd3[-1], tipo = tipo[j], model_lavaan = mm, puntajes = quieres_puntajes)
 
-      mm <- cfa(mm, data = bd3[-1], ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
-      summary(mm)
-      lavaan::parameterEstimates(mm)
+      # mm <- cfa(mm, data = bd3[-1], ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
+
 
       #para identificar los warnings
       # warn[[i]][[vcod_indice[j]]]  <-
@@ -167,12 +166,13 @@ warn <- map(lista, function(x) NULL)
       }
 
       #tabla de descriptivos ********
-      tabla_desc <- tdesci[which(tdesci$cod_preg %in% preg$cod_preg), ] %>%
-        .[c("cod_preg", "Enunciado", "opcion", "prop")] %>%
-        pivot_wider(names_from = opcion, values_from = prop)
+      # tabla_desc <- tdesci[which(tdesci$cod_preg %in% preg$cod_preg), ] %>%
+      #   .[c("cod_preg", "Enunciado", "opcion", "prop")] %>%
+      #   pivot_wider(names_from = opcion, values_from = prop)
 
       #guardamos los insumos
-      ins[[i]][[vcod_indice[j]]] <- list(tabla_desc, resultados1$cargas, resultados1$indicadores)
+      ins[[i]][[vcod_indice[j]]] <- list(#tabla_desc,
+                                         resultados1$cargas, resultados1$indicadores)
 
       if(quieres_excel == TRUE){
         # PARA EL EXCEL ****************************************************************************************
