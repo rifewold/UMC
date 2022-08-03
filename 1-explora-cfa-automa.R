@@ -142,3 +142,48 @@ reporte_insumos_cfa_recurs <- function(data, model_lavaan, recursivo = TRUE){
 modo <- reporte_insumos_cfa_recurs(data = bd1, model_lavaan = mm, recursivo = FALSE)
 reporte_lavaan(modo, puntajes = FALSE)
 
+
+
+# **********************************************************************************************************
+
+
+matriz1
+
+matriz_1p <- select(matriz1, Concatena1, starts_with(c("cod", "Cod")), Analisis2, Invertir, Enunciado, Constructo, OpcionE, sub_escala)
+
+matriz_1p_split <- split(matriz_1p, matriz_1p$Concatena1)
+
+aa <- matriz_1p_split$EVA2021_2Sestudiante_EBRG1
+
+dplyr::distinct(aa, Cod_indice, .keep_all = TRUE)$Analisis2
+
+vcod_indice <- unique(aa$Cod_indice) #escalas del cuestionario i
+
+
+
+
+#Rutina para la escala 'j' de la base 'i'
+escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
+preg <- escala_j[c("cod_preg", "Cod_indice", "Cod_indice2")] #id de la escala
+enunciado <- escala_j[c("cod_preg", "Enunciado")] #enunciados de la escala
+elim_opc <- unique(escala_j$OpcionE)
+constructo_j <- unique(escala_j$Constructo)
+cod_constructo <- unique(escala_j$Cod_indice)
+variables <- c("id","estrato") #le añadi esta variable para que pueda identificar cuales serían las columnas que añadiríamos a la base (además del ID)
+bd1 <- bd[c(variables,preg$cod_preg)] #base con id para pegar los puntajes a la base
+
+
+
+
+
+vcod_indice <- unique(matriz_i$Cod_indice) #escalas del cuestionario i
+tipo <- distinct(matriz_i, Cod_indice, .keep_all = T)$Analisis2 #para identifcar pca o cfa despues
+
+
+
+
+
+
+
+
+
