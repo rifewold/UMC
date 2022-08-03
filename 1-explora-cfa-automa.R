@@ -32,9 +32,8 @@ mm <- acomoda_string_lavaan(preg)
 resultados1 <- reporte_insumos(bd1, tipo = "CFA", model_lavaan = mm, puntajes = FALSE)
 
 
- "resultados1$indicadores[1,2] < 0.95"
-
-eval(parse(text="resultados1$indicadores[1,2] < 0.95"))
+#"resultados1$indicadores[1,2] < 0.95"
+#eval(parse(text="resultados1$indicadores[1,2] < 0.95"))
 
 
 if(resultados1$indicadores[1,2] < 0.95 | # cfi
