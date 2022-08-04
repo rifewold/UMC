@@ -80,7 +80,7 @@ if(resultados1$indicadores[1,2] < 0.95 | # cfi
 
 # generamos una funcion a ver que tal
 
-reporte_insumos_cfa_recurs <- function(data, model_lavaan, recursivo = TRUE){
+cfa_recursivo <- function(data, model_lavaan, recursivo = TRUE, puntajes = TRUE){
 
   mod1 <- cfa(model_lavaan, data = data, ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
 
@@ -123,61 +123,124 @@ reporte_insumos_cfa_recurs <- function(data, model_lavaan, recursivo = TRUE){
         }else{break} # paramos
       }
 
-      return(mod2)
+      cfa_inicial <- reporte_lavaan(mod1, puntajes = FALSE)
+      cfa_sugerido <- reporte_lavaan(mod2, puntajes = puntajes)
+
+      return(list(cfa_inicial = cfa_inicial,
+                  cfa_sugerido = cfa_sugerido))
 
     }else{
 
-      return(mod1)
+      cfa_inicial <- reporte_lavaan(mod1, puntajes = puntajes)
+      return(cfa_inicial)
+
     }
 
   }
 
-  return(mod1)
+  cfa_inicial <- reporte_lavaan(mod1, puntajes = puntajes)
+  return(cfa_inicial)
 
 
 }
 
 # funciona! :D pero donde va?
 
-modo <- reporte_insumos_cfa_recurs(data = bd1, model_lavaan = mm, recursivo = FALSE)
+modo <- cfa_recursivo(data = bd1, model_lavaan = mm, recursivo = TRUE, puntajes = FALSE)
+
+
+subset(lavaan::parameterEstimates(modo), op == "=~")
+
+reliability(modo)[5, ]
+compRelSEM(modo)
 reporte_lavaan(modo, puntajes = FALSE)
+
+
+estadistico = row.names(reliability(model_cfa_lavaan))
+
+
+modo <- reporte_insumos_cfa_recurs(data = bd1, model_lavaan = mm, recursivo = TRUE)
+subset(lavaan::parameterEstimates(modo), op == "=~")
 
 
 
 # **********************************************************************************************************
 
 
-matriz1
+# PCA recursivo .....
 
-matriz_1p <- select(matriz1, Concatena1, starts_with(c("cod", "Cod")), Analisis2, Invertir, Enunciado, Constructo, OpcionE, sub_escala)
+pca_umc_reporte(bd1, corr = "poly", puntajes = FALSE)
 
-matriz_1p_split <- split(matriz_1p, matriz_1p$Concatena1)
-
-aa <- matriz_1p_split$EVA2021_2Sestudiante_EBRG1
-
-dplyr::distinct(aa, Cod_indice, .keep_all = TRUE)$Analisis2
-
-vcod_indice <- unique(aa$Cod_indice) #escalas del cuestionario i
+cor_pol <- psych::polychoric(bd1)$rho
+psych::alpha(cor_pol)$feldt$alpha[[1]]
 
 
+pca_recursivo <- function(data, recursivo = TRUE, puntajes = TRUE){
+
+  summary(prcomp(drop_na(bd1)))
+
+  cor_pol <- psych::polychoric(bd1)$rho
+  val <- eigen(cor_pol)$values #autovalores
+  varex <- val[1]/sum(val)
+  t_vec <- t(eigen(cor_pol)$vectors) # transpuesta de autovectores
+  cargas_x <- t_vec*sqrt(val)
+  if(all(cargas_x[1, ] < 0)) cargas_x <- cargas_x*-1
+  cargas <- data.frame(Item = names(bd1), Cargas = cargas_x[1, ])
+
+  if(recursivo){
+
+    indi <- varex
+    cargafac <- cargas
+
+    if(indi < .50){
+
+      indi_nueva = indi
+      cargafac_nueva = cargafac
+
+      repeat{
+        if(nrow(cargafac_nueva) <= 4){break} # si son 4 o menos items, pará
+
+        if(indi < .50){
+
+          # identificamos items
+          if(nrow(filter(cargafac_nueva, abs(Cargas) < 0.4)) == 0){ # si no hay items con cargas menores a 0.4, identificamos el menor
+            eliminar = filter(cargafac_nueva, Cargas == min(abs(Cargas)))$Item
+          }else{
+            eliminar = filter(cargafac_nueva, abs(Cargas) < 0.4)$Item # identificamos items con cargas menores a 0.4
+          }
+
+          # retiramos las columnas y nuevo modelo
+          bd1_nueva <- bd1[, !(names(bd1) %in% eliminar)]
+
+          mod2 <- cfa(modstring, data = data, ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
+
+        }else{break} # paramos
+      }
+
+      cfa_inicial <- reporte_lavaan(mod1, puntajes = FALSE)
+      cfa_sugerido <- reporte_lavaan(mod2, puntajes = puntajes)
+
+      return(list(cfa_inicial = cfa_inicial,
+                  cfa_sugerido = cfa_sugerido))
+
+    }else{
+
+      cfa_inicial <- reporte_lavaan(mod1, puntajes = puntajes)
+      return(cfa_inicial)
+
+    }
+
+  }
+
+  cfa_inicial <- reporte_lavaan(mod1, puntajes = puntajes)
+  return(cfa_inicial)
 
 
-#Rutina para la escala 'j' de la base 'i'
-escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
-preg <- escala_j[c("cod_preg", "Cod_indice", "Cod_indice2")] #id de la escala
-enunciado <- escala_j[c("cod_preg", "Enunciado")] #enunciados de la escala
-elim_opc <- unique(escala_j$OpcionE)
-constructo_j <- unique(escala_j$Constructo)
-cod_constructo <- unique(escala_j$Cod_indice)
-variables <- c("id","estrato") #le añadi esta variable para que pueda identificar cuales serían las columnas que añadiríamos a la base (además del ID)
-bd1 <- bd[c(variables,preg$cod_preg)] #base con id para pegar los puntajes a la base
+}
 
 
 
 
-
-vcod_indice <- unique(matriz_i$Cod_indice) #escalas del cuestionario i
-tipo <- distinct(matriz_i, Cod_indice, .keep_all = T)$Analisis2 #para identifcar pca o cfa despues
 
 
 

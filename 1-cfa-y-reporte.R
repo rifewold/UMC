@@ -96,7 +96,7 @@ warn <- map(lista, function(x) NULL)
 
     # tdesci <- tdesc[which(tdesc$Concatena1 == nom[i]), ] #descriptivos
 
-    for(j in 1:length(vcod_indice)){ #j=3
+    for(j in 1:length(vcod_indice)){ #j=1
 
       #Rutina para la escala 'j' de la base 'i'
       escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]

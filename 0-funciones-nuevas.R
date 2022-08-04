@@ -214,15 +214,16 @@ reporte_lavaan <- function(model_cfa_lavaan, puntajes = TRUE){
   indicadores1 <- within(indicadores1, {'IC al 90%' =
     ifelse(Indicadores == "rmsea",  paste0("[", round(fit1[5], 3), "-", round(fit1[6], 3), "]"), "")})
 
-  confiabilidad<-data.frame(reliability(model_cfa_lavaan),estadistico=row.names(reliability(model_cfa_lavaan))) #le añadi la confiabilidad
+  # el paquete indica que "reliability" esta deprecated, indica usar "compRelSEM"
+  confiabilidad <- compRelSEM(model_cfa_lavaan)
 
   if(puntajes == TRUE){
     puntajes1 <- as.data.frame(lavaan::lavPredict(model_cfa_lavaan))
   }
 
   if(puntajes == TRUE){
-    return(list(cargas = m, indicadores = indicadores1,confiabilidad=confiabilidad, puntajes = puntajes1))}
-  else {return(list(cargas = m, indicadores = indicadores1,confiabilidad=confiabilidad))}
+    return(list(cargas = m, indicadores = indicadores1, confiabilidad = confiabilidad, puntajes = puntajes1))}
+  else {return(list(cargas = m, indicadores = indicadores1, confiabilidad = confiabilidad))}
 
 }
 
@@ -297,7 +298,7 @@ pca_umc_reporte <- function(x, corr = NULL, puntajes = TRUE){
     cor_pol <- psych::polychoric(x)$rho
     val <- eigen(cor_pol)$values #autovalores
     t_vec <- t(eigen(cor_pol)$vectors) # transpuesta de autovectores
-    confiabilidad <- (alpha(psych::polychoric(x)$rho))$feldt$alpha #Confiabilidad
+    confiabilidad <- psych::alpha(cor_pol, warnings = FALSE)$feldt$alpha[[1]] #Confiabilidad
   }
 
   media_x <- colMeans(x)
@@ -332,7 +333,7 @@ pca_umc_reporte <- function(x, corr = NULL, puntajes = TRUE){
 }
 
 
-#devuelve puntajes e insumos para el reporte de las escalas, segun pca o cfa
+ #devuelve puntajes e insumos para el reporte de las escalas, segun pca o cfa
 reporte_insumos <- function(data, tipo, model_lavaan, puntajes = TRUE){
 
   data2 <- mutate(data, across(everything(), as.numeric))
