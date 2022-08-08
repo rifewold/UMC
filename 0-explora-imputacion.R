@@ -34,6 +34,10 @@ identical(names(matriz_lista), names(lista)) #exactamente mismos elementos
 
 nom <- names(matriz_lista) #para filtrar
 
+datos_imputados <- map(lista, function(x) NULL) #para guardar los insumos del RT
+datos_imputados_lista <- NULL
+tabla_info_missing_pegar <- NULL
+
 for(i in 1:length(nom)){ #i=1
 
   #Preparamos los insumos/variables para la rutina de la base/cuestionario 'i'
@@ -42,7 +46,7 @@ for(i in 1:length(nom)){ #i=1
 
   bd <- lista[[nom[i]]] #tomamos la base i
 
-  for(j in 1:length(vcod_indice)){ #j=2
+  for(j in 1:length(vcod_indice)){ #j=1
 
     #Rutina para la escala 'j' de la base 'i'
     escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
@@ -53,7 +57,7 @@ for(i in 1:length(nom)){ #i=1
     bd1 <- bd[c(variables, preg$cod_preg)] #base con id para pegar los puntajes a la base
 
     # cuantos missing (?)
-    sapply(bd1, function(x) mean(is.na(x)))
+    #sapply(bd1, function(x) mean(is.na(x)))
 
     # hay pocos missing, generar algunos
     # https://stackoverflow.com/questions/30904564/generate-random-missing-values-in-a-dataframe-using-r
@@ -63,7 +67,7 @@ for(i in 1:length(nom)){ #i=1
       is.na(bd1[[sel[t]%/%nrow(bd1) +1]]) <- sel[t]%%nrow(bd1) + 1
     }
 
-    sapply(bd1, function(x) mean(is.na(x)))
+    # sapply(bd1, function(x) mean(is.na(x)))
 
     # le puso missing al id tambien... pongamos otro id
     bd1 <- rowid_to_column(bd1, "id2")
@@ -93,7 +97,7 @@ for(i in 1:length(nom)){ #i=1
       mutate(across(all_of(preg$cod_preg), as.numeric)) %>%
       select(-id)
 
-    (1 - nrow(bd2)/nrow(bd1))*100
+    # (1 - nrow(bd2)/nrow(bd1))*100
 
     #imputación **********
     library(mice)
@@ -105,6 +109,37 @@ for(i in 1:length(nom)){ #i=1
     # complete(mice_data, 1) #de esta manera tomamos la primera imputacion de las 5 que hacemos....
     # entonces imputamos porlas...
     # debemos usar toda la informacion ? o solo una
+
+    datos_imputados[[i]][[j]] <- bd3
+
+  }
+
+    datos_imputados_lista[[i]] <- datos_imputados[[i]] %>%
+      reduce(full_join, by = "id2") %>%
+      left_join(lista[[i]][1], ., by = c("id" = "id2"))
+
+    tabla_info_missing_pegar <- bind_rows(tabla_info_missing_pegar, tabla_info_missing)
+
+
+}
+
+    tabla_info_missing
+
+    df <- data.frame(Doubles=double(),
+                     Ints=integer(),
+                     Factors=factor(),
+                     Logicals=logical(),
+                     Characters=character(),
+                     stringsAsFactors=FALSE)
+
+
+    reporte_missing
+
+    reporte_missing[]
+
+    lista[[i]][1]
+
+    pca_umc_reporte(bd3[-1], corr = "poly")
 
 
     complete(mice_data, action = "long")
