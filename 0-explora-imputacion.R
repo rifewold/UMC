@@ -3,6 +3,7 @@ rm(list = ls())
 library(tidyverse)
 library(here)
 library(rio)
+library(mice)
 rowSumsNA <- function(x) rowSums(is.na(x)) #contar NA en las observaciones
 
 # imputacion (?)
@@ -46,7 +47,7 @@ for(i in 1:length(nom)){ #i=1
 
   bd <- lista[[nom[i]]] #tomamos la base i
 
-  for(j in 1:length(vcod_indice)){ #j=1
+  for(j in 1:length(vcod_indice)){ #j=2
 
     #Rutina para la escala 'j' de la base 'i'
     escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
@@ -75,21 +76,18 @@ for(i in 1:length(nom)){ #i=1
     bd1_b <- bd1 %>%
       mutate(sum_nas = rowSumsNA(across(all_of(preg$cod_preg))),
              porc_nas = sum_nas/length(preg$cod_preg),
-             con_algun_missing = ifelse(porc_nas > 0, 1, 0),
-             missing = ifelse(porc_nas >= 0.25, 1, 0),
-             se_recupera_con_imputacion = ifelse(porc_nas > 0 & porc_nas < 0.25, 1, 0),
-             completo = ifelse(porc_nas == 0, 1, 0))
+             nas_completo = ifelse(porc_nas == 0, 1, 0),
+             nas_alguno = ifelse(porc_nas > 0, 1, 0),
+             nas_se_recupera = ifelse(porc_nas > 0 & porc_nas < 0.25, 1, 0),
+             nas_missing = ifelse(porc_nas >= 0.25, 1, 0)
+             )
 
-    tabla_info_missing <- data.frame(
-      cod_indice = cod_constructo,
-      constructo = constructo_j,
-      Total = nrow(bd1_b),
-      Completos = round(sum(bd1_b$completo)/nrow(bd1_b)*100, 2),
-      Incompletos = round(sum(bd1_b$con_algun_missing)/nrow(bd1_b)*100, 2),
-      Casos_imputados = round(sum(bd1_b$se_recupera_con_imputacion)/nrow(bd1_b)*100, 2),
-      Porcentaje_missing = round(sum(bd1_b$missing)/nrow(bd1_b)*100, 2)
-    )
-
+    tabla_info_missing <- bd1_b %>%
+      summarise(across(starts_with("nas"), ~round(sum(.x)/nrow(bd1_b)*100, 2))) %>%
+      rename(Completos = 1, Incompletos = 2, Casos_imputados = 3, Porcentaje_missing = 4) %>%
+      bind_cols(cod_indice = cod_constructo,
+                constructo = constructo_j,
+                Total = nrow(bd1_b), .)
 
     bd2 <- bd1 %>%
       #identificar observaciones con mas de 25% de missing y retirarlas
@@ -111,6 +109,7 @@ for(i in 1:length(nom)){ #i=1
     # debemos usar toda la informacion ? o solo una
 
     datos_imputados[[i]][[j]] <- bd3
+    tabla_info_missing_pegar <- bind_rows(tabla_info_missing_pegar, tabla_info_missing)
 
   }
 
@@ -118,10 +117,11 @@ for(i in 1:length(nom)){ #i=1
       reduce(full_join, by = "id2") %>%
       left_join(lista[[i]][1], ., by = c("id" = "id2"))
 
-    tabla_info_missing_pegar <- bind_rows(tabla_info_missing_pegar, tabla_info_missing)
-
 
 }
+
+
+
 
     tabla_info_missing
 
