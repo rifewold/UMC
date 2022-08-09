@@ -7,6 +7,24 @@ library(mice)
 rowSumsNA <- function(x) rowSums(is.na(x)) #contar NA en las observaciones
 invertir <- function(x, i) i+1 - x #para invertir
 
+chequeo <- function(mc){
+
+  c1 <- apply(mc, 1, function(x) all(x[x != 1] > 0)) #todas las correlaciones son positivas?
+  c2 <- apply(mc, 1, function(x) any(x[x != 1] > 0)) #hay algun positivo?
+  c3 <- apply(mc, 1, function(x) any(x[x != 1] > 0.30)) #todas las correlaciones son mayores a .30?
+
+  tabla1 <- data.frame(
+    item = names(c1),
+    todo_positivo = c1,
+    hay_positivo = c2,
+    todos_min_30 = c3,
+    KMO_item = psych::KMO(mc)$MSAi,
+    KMO = psych::KMO(mc)$MSA)
+
+  return(tabla1)
+
+}
+
 # imputacion (?)
 
 # (0) importamos bases de datos ----
@@ -128,28 +146,12 @@ for(i in 1:length(nom)){ #i=2
       map(~select(bd3, all_of(.x))) %>% #sub_escalas
       map(~psych::polychoric(.x)$rho) #correlacion policor
 
+    map(bd3_corr, ~chequeo(.x))
+
 
     map(bd3_corr, ~psych::KMO(.x)$MSA)
 
     psych::KMO(bd3_corr$FAM2SHSE_EMPATAP)$MSA
-
-
-    chequeo <- function(mc){
-
-      c1 <- apply(mc, 1, function(x) all(x[x != 1] > 0)) #todas las correlaciones son positivas?
-      c2 <- apply(mc, 1, function(x) any(x[x != 1] > 0)) #hay algun positivo?
-      c3 <- apply(mc, 1, function(x) any(x[x != 1] > 0.30)) #todas las correlaciones son mayores a .30?
-
-      tabla1 <- data.frame(
-        item = names(c1),
-        todo_positivo = c1,
-        hay_positivo = c2,
-        todos_min_30 = c3)
-
-      return(tabla1)
-
-
-    }
 
     chequeo(bd3_corr$FAM2SHSE_EMPATAP)
 
