@@ -5,6 +5,7 @@ library(here)
 library(rio)
 library(mice)
 rowSumsNA <- function(x) rowSums(is.na(x)) #contar NA en las observaciones
+invertir <- function(x, i) i+1 - x #para invertir
 
 # imputacion (?)
 
@@ -39,7 +40,7 @@ datos_imputados <- map(lista, function(x) NULL) #para guardar los insumos del RT
 datos_imputados_lista <- NULL
 tabla_info_missing_pegar <- NULL
 
-for(i in 1:length(nom)){ #i=1
+for(i in 1:length(nom)){ #i=2
 
   #Preparamos los insumos/variables para la rutina de la base/cuestionario 'i'
   matriz_i <- matriz_lista[[nom[i]]]
@@ -47,13 +48,14 @@ for(i in 1:length(nom)){ #i=1
 
   bd <- lista[[nom[i]]] #tomamos la base i
 
-  for(j in 1:length(vcod_indice)){ #j=2
+  for(j in 1:length(vcod_indice)){ #j=1
 
     #Rutina para la escala 'j' de la base 'i'
     escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
-    constructo_j <- unique(escala_j$Constructo)
-    cod_constructo <- unique(escala_j$Cod_indice)
     preg <- escala_j[c("cod_preg", "Cod_indice", "Cod_indice2")] #id de la escala
+    constructo_j <- unique(escala_j$Constructo)
+    elim_opc <- unique(escala_j$OpcionE)
+    cod_constructo <- unique(escala_j$Cod_indice)
     variables <- c("id") #le añadi esta variable para que pueda identificar cuales serían las columnas que añadiríamos a la base (además del ID)
     bd1 <- bd[c(variables, preg$cod_preg)] #base con id para pegar los puntajes a la base
 
@@ -108,8 +110,86 @@ for(i in 1:length(nom)){ #i=1
     # entonces imputamos porlas...
     # debemos usar toda la informacion ? o solo una
 
+    #para invertir
+    if(any(!is.na(escala_j$Invertir))){
+      items_invertir <- filter(escala_j, Invertir == "Invertir")$cod_preg
+      bd3 <- mutate(bd3, across(all_of(items_invertir), ~invertir(.x, max(select(bd3, -id2)))))
+    }
+
+    #para eliminar la opcion que no entra al modelo
+    if(!is.na(elim_opc)){
+      bd3 <- filter(bd3, across(all_of(preg$cod_preg), ~.x != elim_opc))
+      bd3 <- mutate(bd3, across(all_of(preg$cod_preg), ~.x - 1))
+    }
+
+
+    bd3_corr <- split(preg, preg$Cod_indice2) %>%
+      map(1) %>% # cod_preg
+      map(~select(bd3, all_of(.x))) %>% #sub_escalas
+      map(~psych::polychoric(.x)$rho) #correlacion policor
+
+
+    map(bd3_corr, ~psych::KMO(.x)$MSA)
+
+    psych::KMO(bd3_corr$FAM2SHSE_EMPATAP)$MSA
+
+
+    chequeo <- function(mc){
+
+      c1 <- apply(mc, 1, function(x) all(x[x != 1] > 0)) #todas las correlaciones son positivas?
+      c2 <- apply(mc, 1, function(x) any(x[x != 1] > 0)) #hay algun positivo?
+      c3 <- apply(mc, 1, function(x) any(x[x != 1] > 0.30)) #todas las correlaciones son mayores a .30?
+
+      tabla1 <- data.frame(
+        item = names(c1),
+        todo_positivo = c1,
+        hay_positivo = c2,
+        todos_min_30 = c3)
+
+      return(tabla1)
+
+
+    }
+
+    chequeo(bd3_corr$FAM2SHSE_EMPATAP)
+
+    c1 <- apply(mc, 1, function(x) all(x[x != 1] > 0)) #todas las correlaciones son positivas?
+    c2 <- apply(mc, 1, function(x) any(x[x != 1] > 0)) #hay algun positivo?
+    c3 <- apply(mc, 1, function(x) any(x[x != 1] > 0.30)) #todas las correlaciones son mayores a .30?
+
+
+    ej <- data.frame(
+      v1 = c(1, 0.34, 0.25),
+      v2 = c(0.34, 1, -0.10),
+      v3 = c(0.25, -0.10, 1)
+    )
+
+    ej
+
+
+
+    apply(ej, 1, function(x) all(x[x != 1] > 0)) #todas son positivas
+    apply(ej, 1, function(x) any(x[x != 1] > 0)) #hay alguna positiva
+
+    chequeo(cc)
+
+    apply(cor(bd3[-1]), 1, function(x) any(x[x != 1] > 0))
+
+    cc <- bd3_corr$FAM2SHSE_EMPATAP
+
+    apply(cc, 1, function(x) any(x[x != 1] > 0))
+    apply(cc, 1, function(x) any(x[x != 1] > 0.30))
+
+
+    psych::KMO()
+
     datos_imputados[[i]][[j]] <- bd3
     tabla_info_missing_pegar <- bind_rows(tabla_info_missing_pegar, tabla_info_missing)
+
+
+    apply(cor(bd3[-1]), 1, function(x) any(x[x != 1] > 0))
+    apply(cor(bd3[-1]), 2, function(x) prop.table(table(x), 1))
+
 
   }
 
