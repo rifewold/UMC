@@ -1,4 +1,6 @@
 
+library(lavaan)
+
 # funcion para probar
 acomoda_string_lavaan <- function(data_preg){
   if(length(unique(data_preg$Cod_indice2)) == 1){
@@ -148,8 +150,13 @@ cfa_recursivo <- function(data, model_lavaan, recursivo = TRUE, puntajes = TRUE)
 
 modo <- cfa_recursivo(data = bd1, model_lavaan = mm, recursivo = TRUE, puntajes = FALSE)
 
+map(modo, "cargas") %>%
+  map(~select(.x, -4, -5)) %>%
+  reduce(~left_join(.x, .y, by = c("Escala", "Item"), suffix = c(".inicial", ".sugerido")))
 
-subset(lavaan::parameterEstimates(modo), op == "=~")
+indicadores <- map(modo, "indicadores") %>%
+  map(~select(.x, -3)) %>%
+  reduce(~left_join(.x, .y, by = "Indicadores", suffix = c(".inicial", ".sugerido")))
 
 reliability(modo)[5, ]
 compRelSEM(modo)

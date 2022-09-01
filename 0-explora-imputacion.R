@@ -57,8 +57,9 @@ nom <- names(matriz_lista) #para filtrar
 datos_imputados <- map(lista, function(x) NULL) #para guardar los insumos del RT
 datos_imputados_lista <- NULL
 tabla_info_missing_pegar <- NULL
+bd3_corr_check_lista <- map(lista, function(x) NULL) #para guardar los insumos del RT
 
-for(i in 1:length(nom)){ #i=2
+for(i in 1:length(nom)){ #i=1
 
   #Preparamos los insumos/variables para la rutina de la base/cuestionario 'i'
   matriz_i <- matriz_lista[[nom[i]]]
@@ -118,7 +119,6 @@ for(i in 1:length(nom)){ #i=2
     # (1 - nrow(bd2)/nrow(bd1))*100
 
     #imputación **********
-    library(mice)
     pred <- mice(bd2, maxit = 0, print = F)$predictorMatrix #'falso' mice, para excluir id
     pred[,'id2'] <- 0 #excluir id de la prediccion
 
@@ -140,58 +140,18 @@ for(i in 1:length(nom)){ #i=2
       bd3 <- mutate(bd3, across(all_of(preg$cod_preg), ~.x - 1))
     }
 
-
-    bd3_corr <- split(preg, preg$Cod_indice2) %>%
-      map(1) %>% # cod_preg
+    bd3_corr_check <- preg %>%
+      mutate(Cod_indice2 = ifelse(is.na(Cod_indice2), Cod_indice, Cod_indice2)) %>%
+      split(., .$Cod_indice2) %>%
+      map(1) %>%
       map(~select(bd3, all_of(.x))) %>% #sub_escalas
-      map(~psych::polychoric(.x)$rho) #correlacion policor
+      map(~psych::polychoric(.x)$rho) %>% #correlacion policor
+      map(~chequeo(.x))
 
-    map(bd3_corr, ~chequeo(.x))
-
-
-    map(bd3_corr, ~psych::KMO(.x)$MSA)
-
-    psych::KMO(bd3_corr$FAM2SHSE_EMPATAP)$MSA
-
-    chequeo(bd3_corr$FAM2SHSE_EMPATAP)
-
-    c1 <- apply(mc, 1, function(x) all(x[x != 1] > 0)) #todas las correlaciones son positivas?
-    c2 <- apply(mc, 1, function(x) any(x[x != 1] > 0)) #hay algun positivo?
-    c3 <- apply(mc, 1, function(x) any(x[x != 1] > 0.30)) #todas las correlaciones son mayores a .30?
-
-
-    ej <- data.frame(
-      v1 = c(1, 0.34, 0.25),
-      v2 = c(0.34, 1, -0.10),
-      v3 = c(0.25, -0.10, 1)
-    )
-
-    ej
-
-
-
-    apply(ej, 1, function(x) all(x[x != 1] > 0)) #todas son positivas
-    apply(ej, 1, function(x) any(x[x != 1] > 0)) #hay alguna positiva
-
-    chequeo(cc)
-
-    apply(cor(bd3[-1]), 1, function(x) any(x[x != 1] > 0))
-
-    cc <- bd3_corr$FAM2SHSE_EMPATAP
-
-    apply(cc, 1, function(x) any(x[x != 1] > 0))
-    apply(cc, 1, function(x) any(x[x != 1] > 0.30))
-
-
-    psych::KMO()
+    bd3_corr_check_lista[[i]][[j]] <- bd3_corr_check
 
     datos_imputados[[i]][[j]] <- bd3
     tabla_info_missing_pegar <- bind_rows(tabla_info_missing_pegar, tabla_info_missing)
-
-
-    apply(cor(bd3[-1]), 1, function(x) any(x[x != 1] > 0))
-    apply(cor(bd3[-1]), 2, function(x) prop.table(table(x), 1))
-
 
   }
 
@@ -199,135 +159,35 @@ for(i in 1:length(nom)){ #i=2
       reduce(full_join, by = "id2") %>%
       left_join(lista[[i]][1], ., by = c("id" = "id2"))
 
-
 }
 
 
+bd3_corr_check_lista
+tabla_info_missing_pegar
+datos_imputados_lista
+
+flatten(bd3_corr_check_lista) %>%
+  flatten() %>%
+  bind_rows(.id = "indicador")
 
 
-    tabla_info_missing
+#************************************************
 
-    df <- data.frame(Doubles=double(),
-                     Ints=integer(),
-                     Factors=factor(),
-                     Logicals=logical(),
-                     Characters=character(),
-                     stringsAsFactors=FALSE)
+lista$EVA2021_2Sestudiante_EBRG1$p01
+attr(lista$EVA2021_2Sestudiante_EBRG1$p02_01, "Pregunta") <- "A continuación encontrarás varios enunciados que describen el lugar dentro de tu casa donde estudias y haces tus tareas. Marca “Sí” o “No” en cada enunciado según corresponda con tu caso"
+attr(lista$EVA2021_2Sestudiante_EBRG1$p02_01, "Enunciado") <- "Hay limpieza y orden en el lugar donde estudio"
+attr(lista$EVA2021_2Sestudiante_EBRG1$p02_01)
 
+attr(y, "my_attribute") <- "This is a vector"
+attr(lista$EVA2021_2Sestudiante_EBRG1$p02_01, "Pregunta")
+attr(lista$EVA2021_2Sestudiante_EBRG1$p02_01, "Enunciado")
 
-    reporte_missing
+ff <- lista$EVA2021_2Sestudiante_EBRG1
 
-    reporte_missing[]
+export(ff, "ejemplo.sav")
 
-    lista[[i]][1]
-
-    pca_umc_reporte(bd3[-1], corr = "poly")
-
-
-    complete(mice_data, action = "long")
-
-    pool(mice_data)
-
-    head(complete(mice_data, 2))
-    head(bd2)
-    bd %>% mutate(across(all_of(preg$cod_preg), as.numeric)) %>% head()
-
-    mice_data$imp
-
-
-    library(semTools)
-
-    # generar puntajes con cada imputacion
-
-    # primera imputacion
-    bd_imp1 <- as_tibble(complete(mice_data, 1))
-    m1_imp1 <- cfa(mm, data = bd_imp1, ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
-    summary(m1_imp1)
-    lavaan::fitmeasures(m1_imp1,  c("cfi", "tli", "srmr", "rmsea"))
-    subset(lavaan::parameterEstimates(m1_imp1), op == "=~")
-    puntajes1 <- as.data.frame(lavaan::lavPredict(m1_imp1))
-    hist(puntajes1$EST2SMAT_MOTIV)
-
-    # usando todas las imputaciones de manera integrada
-    impList <- list()
-    for (i in 1:mice_data$m) impList[[i]] <- complete(mice_data, action = i)
-    mod_mi <- cfa.mi(mm, data = impList, ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
-    mod_mi <- cfa.mi(mm, data = impList, mimic = "Mplus", estimator = "WLSMV")
-
-    subset(summary(mod_mi, output = "data.frame"), op == "=~")
-    lavaan::fitmeasures(mod_mi, c("cfi","tli","rmsea","srmr"))[c(1, 3, 5, 13)]
-    puntajes_mi <- as.data.frame(lavaan::lavPredict(mod_mi))
-    hist(puntajes_mi$EST2SMAT_MOTIV)
-
-    puntajes_mi <- plausibleValues(mod_mi)
-    hist(puntajes_mi[[1]][[2]])
-    hist(puntajes_mi[[2]][[2]])
-    hist(puntajes_mi[[3]][[2]])
-    hist(puntajes_mi[[4]][[2]])
-
-    # es una locura!
-
-    bd_imp1_5 <- map(1:5, ~complete(mice_data, .x))
-
-
-    # PENDIENTE -----
-
-    # CFA en MPLUS
-    MplusAutomation::prepareMplusData(bd2[-1], "C:/Users/factoresasociados03/Desktop/cfa_en_mplus/data1.dat")
-
-
-    "C:/Users/factoresasociados03/Desktop/cfa_en_mplus/puntajes.dat"
-
-    m1_mplus <- MplusAutomation::readModels("C:/Users/factoresasociados03/Desktop/cfa_en_mplus/mptext1.out")
-
-    MplusAutomation::
-    fc <- rio::import("C:/Users/factoresasociados03/Desktop/cfa_en_mplus/puntajes.dat")
-
-    m1_mplus$parameters$stdyx.standardized %>%
-      filter(paramHeader == "F1.BY")
-
-
-    m1_mplus$summaries$CFI
-    m1_mplus$summaries$TLI
-    m1_mplus$summaries$RMSEA_Estimate
-
-
-    lavaan::fitmeasures(m1_imp1,  c("cfi", "tli", "srmr", "rmsea"))
-    subset(lavaan::parameterEstimates(m1_imp1), op == "=~")
-    subset(lavaan::standardizedSolution(m1_imp1), op == "=~")
-
-    mod_para_ejec <- MplusAutomation::mplusObject(
-      TITLE = "CFA en Mplus",
-      VARIABLE =
-        "CATEGORICAL ARE p11_01-p11_09",
-      MODEL = "F1 by p11_01-p11_09",
-      OUTPUT = "STDYX SVALUES MODINDICES",
-      rdata = bd2[-1],
-      usevariables = colnames(bd2[-1]),
-      SAVEDATA =
-         "FILE is C:/Users/factoresasociados03/Desktop/cfa_en_mplus/cfa1/puntajes.dat;
-          SAVE = FSCORES;
-          FORMAT IS FREE;"
-    )
-
-    rr <- "C:/Users/factoresasociados03/Desktop/cfa_en_mplus/mplusautomat/"
-    rr2 <- "C:/Users/factoresasociados03/Desktop/cfa_en_mplus/"
-
-    rr3 <- "C:/Users/factoresasociados03/Desktop/cfa_en_mplus/cfa1/"
-
-    resulta <- MplusAutomation::mplusModeler(mod_para_ejec,
-                                  modelout = paste0(rr3, "cfa.inp"),
-                                  dataout = paste0(rr3, "data1.dat"),
-                                  run = 1L)
-
-    fc <- rio::import("C:/Users/factoresasociados03/Desktop/cfa_en_mplus/cfa1/puntajes.dat")
-
-    resulta$parameters$stdyx.standardized %>%
-      filter(paramHeader == "F1.BY")
-
-
-
-
+map_df(ff, ~attr(.x, "Enunciado")) %>%
+  gather()
 
 
 

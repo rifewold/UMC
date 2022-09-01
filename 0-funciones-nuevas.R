@@ -215,7 +215,7 @@ reporte_lavaan <- function(model_cfa_lavaan, puntajes = TRUE){
     ifelse(Indicadores == "rmsea",  paste0("[", round(fit1[5], 3), "-", round(fit1[6], 3), "]"), "")})
 
   # el paquete indica que "reliability" esta deprecated, indica usar "compRelSEM"
-  confiabilidad <- compRelSEM(model_cfa_lavaan)
+  confiabilidad <- semTools::compRelSEM(model_cfa_lavaan)
 
   if(puntajes == TRUE){
     puntajes1 <- as.data.frame(lavaan::lavPredict(model_cfa_lavaan))
