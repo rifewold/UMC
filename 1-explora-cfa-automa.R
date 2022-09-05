@@ -18,28 +18,6 @@ acomoda_string_lavaan <- function(data_preg){
 }
 
 
-
-
-modstring <- split(preg, cargafac_nueva$lhs) %>%
-  map(~paste(pull(.x, rhs), collapse = "+")) %>%
-  imap(~paste(.y, .x, sep = '=~')) %>%
-  paste(collapse = "\n")
-
-preg %>%
-  mutate(Cod_indice2 = ifelse(is.na(Cod_indice2), Cod_indice, Cod_indice2)) %>%
-  split(., .$Cod_indice2) %>%
-  map(~paste(pull(.x, cod_preg), collapse = "+")) %>%
-  imap(~paste(.y, .x, sep = '=~')) %>%
-  paste(collapse = "\n")
-
-
-  map(~select(bd3, all_of(.x))) %>% #sub_escalas
-  map(~psych::polychoric(.x)$rho) %>% #correlacion policor
-  map(~chequeo(.x))
-
-
-
-
 lista = rio::import_list(Sys.glob(here("Bases ejemplo", "*.sav")), setclass = "tibble") %>%
   map(.,~rio::factorize(.))
 
@@ -60,47 +38,6 @@ resultados1 <- reporte_insumos(bd1, tipo = "CFA", model_lavaan = mm, puntajes = 
 
 #"resultados1$indicadores[1,2] < 0.95"
 #eval(parse(text="resultados1$indicadores[1,2] < 0.95"))
-
-
-if(resultados1$indicadores[1,2] < 0.95 | # cfi
-   resultados1$indicadores[2,2] < 0.95 | # tli
-   resultados1$indicadores[3,2] > 0.10 | # srmr
-   resultados1$indicadores[4,2] > 0.10){ # rmsea
-
-  resultados2 = resultados1
-  preg2 = preg
-
-  repeat{
-    if(length(preg2$cod_preg) <= 4){break} # si son 4 o menos items, pará
-
-    if(resultados2$indicadores[1,2] < 0.95|
-       resultados2$indicadores[2,2] < 0.95|
-       resultados2$indicadores[3,2] > 0.10|
-       resultados2$indicadores[4,2] > 0.10){
-
-      # identificamos items
-      if(nrow(filter(resultados2$cargas, Est < 0.4)) == 0){ # si no hay items con cargas menores a 0.4, identificamos el menor
-        eliminar = filter(resultados2$cargas, Est == min(Est))$Item
-      }else{
-        eliminar = filter(resultados2$cargas, Est < 0.4)$Item # identificamos items con cargas menores a 0.4
-      }
-
-      preg2 = filter(preg2, !cod_preg %in% all_of(eliminar)) # nuevo modelo
-      mm2 <- acomoda_string_lavaan(preg2) # generamos string con nuevo modelo
-
-      resultados2 <- reporte_insumos(bd1, tipo = "CFA", model_lavaan = mm2, puntajes = FALSE)
-
-    }else{ #cuando cumpla alguno de los criterios, paramos
-
-        break
-
-      }
-  }
-
-
-}
-
-
 
 ###############
 
@@ -180,7 +117,7 @@ cargas <- map(modo, "cargas") %>%
 
 indicadores <- map(modo, "indicadores") %>%
   map(~select(.x, -3)) %>%
-  reduce(~left_join(.x, .y, by = c("Escala", "Indicadores"), suffix = c(".inicial", ".sugerido")))
+  reduce(~left_join(.x, .y, by = c("Indicadores"), suffix = c(".inicial", ".sugerido")))
 
 bind_cols(cargas, indicadores)
 
