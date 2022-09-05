@@ -116,7 +116,7 @@ warn <- map(lista, function(x) NULL)
       #imputación **********
       pred <- mice(bd2, maxit = 0, print = F)$predictorMatrix #'falso' mice, para excluir id
       pred[,'id'] <- 0 #excluir id de la prediccion
-      mice_data <- mice(bd2, m = 5, maxit = 5, meth = 'pmm', predictorMatrix = pred, seed = 343, print = FALSE) #imputacion
+      mice_data <- mice(bd2, m = 1, maxit = 5, meth = 'pmm', predictorMatrix = pred, seed = 343, print = FALSE) #imputacion
       bd3 <- as_tibble(complete(mice_data, 1)) # bd3: datos imputados
 
       #para invertir
@@ -130,6 +130,52 @@ warn <- map(lista, function(x) NULL)
         bd3 <- filter(bd3, across(all_of(preg$cod_preg), ~.x != elim_opc))
         bd3 <- mutate(bd3, across(all_of(preg$cod_preg), ~.x - 1))
       }
+
+      if(tipo[j] == "PCA"){ #Si se quiere PCA
+
+        resultados1 <- pca_recursivo(bd3[3:10], recursivo = FALSE, puntajes = TRUE)
+
+      }else{
+
+        mm <- preg %>%
+          mutate(Cod_indice2 = ifelse(is.na(Cod_indice2), Cod_indice, Cod_indice2)) %>%
+          split(., .$Cod_indice2) %>%
+          map(~paste(pull(.x, cod_preg), collapse = "+")) %>%
+          imap(~paste(.y, .x, sep = '=~')) %>%
+          paste(collapse = "\n")
+
+        resultados1 <- cfa_recursivo(data = bd3[3:10], model_lavaan = mm, recursivo = FALSE, puntajes = TRUE)
+
+      }
+
+      if(quieres_puntajes != FALSE){
+        if(tipo[j] == "PCA"){ #nombre a la columna generada con PCA
+          resultados1$puntajes <- setNames(as.data.frame(resultados1$puntajes), unique(preg$Cod_indice))
+        }
+
+        #mean = 0, sd = 1 [scale() usa matrices, nos desconfigura las cosas]
+        resultados1$puntajes <- as.data.frame(apply(resultados1$puntajes, 2, function(x) (x - mean(x))/sd(x) ))
+
+        lista[[i]] <-  lista[[i]] %>% #pegado de puntajes a base inicial
+          left_join(
+            bind_cols(bd3[1], resultados1$puntajes), by = "id") %>%
+          asigna_label(constructo_j, cod_constructo)
+      }
+
+      resultados1
+
+      lista[[i]] %>% View()
+
+      # acomodamos
+      preg %>%
+        mutate(Cod_indice2 = ifelse(is.na(Cod_indice2), Cod_indice, Cod_indice2)) %>%
+        split(., .$Cod_indice2) %>%
+        map(~paste(pull(.x, cod_preg), collapse = "+")) %>%
+        imap(~paste(.y, .x, sep = '=~')) %>%
+        paste(collapse = "\n")
+
+      mm <- acomoda_string_lavaan(preg)
+
 
       #acomodamos string para la funcion de lavaan
       # y de paso los labels y cod_indices segun n factores
@@ -448,10 +494,10 @@ export(list("CFA_indicadores de ajuste" = indicad1,"CFA_indicadores de ajuste_mo
 #
 # install.packages("beepr")
 #
-# library(beepr)
-# # Play all 11 sounds available in beepr:
-# for(i in 1:11){
-#   beep(sound = i)
-#   Sys.sleep(2) # Sleep for 2 seconds
-# }
-#
+library(beepr)
+# Play all 11 sounds available in beepr:
+for(i in 1:11){
+   beep(sound = i)
+  Sys.sleep(2) # Sleep for 2 seconds
+}
+

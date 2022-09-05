@@ -39,7 +39,6 @@ matriz_cfa <- matriz %>%
          sub_escala, starts_with("Cod"), Enunciado,
          Analisis2, Invertir, OpcionE)
 
-
 #mismas bases en miau y lista
 matriz_cfa <- matriz_cfa %>% filter(Concatena1 %in% names(lista))
 lista <- keep(lista, names(lista) %in% matriz_cfa$Concatena1)
@@ -67,7 +66,7 @@ for(i in 1:length(nom)){ #i=1
 
   bd <- lista[[nom[i]]] #tomamos la base i
 
-  for(j in 1:length(vcod_indice)){ #j=1
+  for(j in 1:length(vcod_indice)){ #j=2
 
     #Rutina para la escala 'j' de la base 'i'
     escala_j <- matriz_i[which(matriz_i$Cod_indice == vcod_indice[j]), ]
@@ -164,12 +163,16 @@ for(i in 1:length(nom)){ #i=1
 
 bd3_corr_check_lista
 tabla_info_missing_pegar
+
+# podemos guardar esto en un excel:
+map(bd3_corr_check_lista, flatten) %>%
+  map(~pega_lista(.x, "constructo")) %>%
+  pega_lista("base")
+
+tabla_info_missing_pegar
+
+# y guardamos datos imputados:
 datos_imputados_lista
-
-flatten(bd3_corr_check_lista) %>%
-  flatten() %>%
-  bind_rows(.id = "indicador")
-
 
 #************************************************
 

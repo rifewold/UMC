@@ -1,5 +1,7 @@
 
 library(lavaan)
+library(here)
+library(tidyverse)
 
 # funcion para probar
 acomoda_string_lavaan <- function(data_preg){
@@ -16,11 +18,33 @@ acomoda_string_lavaan <- function(data_preg){
 }
 
 
+
+
+modstring <- split(preg, cargafac_nueva$lhs) %>%
+  map(~paste(pull(.x, rhs), collapse = "+")) %>%
+  imap(~paste(.y, .x, sep = '=~')) %>%
+  paste(collapse = "\n")
+
+preg %>%
+  mutate(Cod_indice2 = ifelse(is.na(Cod_indice2), Cod_indice, Cod_indice2)) %>%
+  split(., .$Cod_indice2) %>%
+  map(~paste(pull(.x, cod_preg), collapse = "+")) %>%
+  imap(~paste(.y, .x, sep = '=~')) %>%
+  paste(collapse = "\n")
+
+
+  map(~select(bd3, all_of(.x))) %>% #sub_escalas
+  map(~psych::polychoric(.x)$rho) %>% #correlacion policor
+  map(~chequeo(.x))
+
+
+
+
 lista = rio::import_list(Sys.glob(here("Bases ejemplo", "*.sav")), setclass = "tibble") %>%
   map(.,~rio::factorize(.))
 
 bd <- lista$EVA2021_2Sestudiante_EBRG1
-matriz <- import(here("Bases ejemplo","MIAU2021.xlsx"))
+matriz <- rio::import(here("Bases ejemplo","MIAU2021.xlsx"))
 
 bd1 <- bd %>%
   select(starts_with("p11")) %>%
@@ -150,13 +174,15 @@ cfa_recursivo <- function(data, model_lavaan, recursivo = TRUE, puntajes = TRUE)
 
 modo <- cfa_recursivo(data = bd1, model_lavaan = mm, recursivo = TRUE, puntajes = FALSE)
 
-map(modo, "cargas") %>%
+cargas <- map(modo, "cargas") %>%
   map(~select(.x, -4, -5)) %>%
   reduce(~left_join(.x, .y, by = c("Escala", "Item"), suffix = c(".inicial", ".sugerido")))
 
 indicadores <- map(modo, "indicadores") %>%
   map(~select(.x, -3)) %>%
-  reduce(~left_join(.x, .y, by = "Indicadores", suffix = c(".inicial", ".sugerido")))
+  reduce(~left_join(.x, .y, by = c("Escala", "Indicadores"), suffix = c(".inicial", ".sugerido")))
+
+bind_cols(cargas, indicadores)
 
 reliability(modo)[5, ]
 compRelSEM(modo)
@@ -184,20 +210,12 @@ psych::alpha(cor_pol)$feldt$alpha[[1]]
 
 pca_recursivo <- function(data, recursivo = TRUE, puntajes = TRUE){
 
-  summary(prcomp(drop_na(bd1)))
-
-  cor_pol <- psych::polychoric(bd1)$rho
-  val <- eigen(cor_pol)$values #autovalores
-  varex <- val[1]/sum(val)
-  t_vec <- t(eigen(cor_pol)$vectors) # transpuesta de autovectores
-  cargas_x <- t_vec*sqrt(val)
-  if(all(cargas_x[1, ] < 0)) cargas_x <- cargas_x*-1
-  cargas <- data.frame(Item = names(bd1), Cargas = cargas_x[1, ])
+  pca_uno <- pca_1(data)
 
   if(recursivo){
 
-    indi <- varex
-    cargafac <- cargas
+    indi <- pca_uno$varex
+    cargafac <- pca_uno$cargas
 
     if(indi < .50){
 
@@ -217,40 +235,125 @@ pca_recursivo <- function(data, recursivo = TRUE, puntajes = TRUE){
           }
 
           # retiramos las columnas y nuevo modelo
-          bd1_nueva <- bd1[, !(names(bd1) %in% eliminar)]
-
-          mod2 <- cfa(modstring, data = data, ordered = TRUE, mimic = "Mplus", estimator = "WLSMV")
+          data2 <- data[, !(names(data) %in% eliminar)]
+          pca_dos <- pca_1(drop_na(data2))
+          indi <- pca_dos$varex
+          cargafac_nueva <- pca_dos$cargas
 
         }else{break} # paramos
       }
 
-      cfa_inicial <- reporte_lavaan(mod1, puntajes = FALSE)
-      cfa_sugerido <- reporte_lavaan(mod2, puntajes = puntajes)
+      pca_inicial <- pca_umc_reporte_b(data, corr = "poly", puntajes = FALSE)
+      pca_sugerido <- pca_umc_reporte_b(data2, corr = "poly", puntajes = puntajes)
 
-      return(list(cfa_inicial = cfa_inicial,
-                  cfa_sugerido = cfa_sugerido))
+      return(list(pca_inicial = pca_inicial,
+                  pca_sugerido = pca_sugerido))
 
     }else{
 
-      cfa_inicial <- reporte_lavaan(mod1, puntajes = puntajes)
-      return(cfa_inicial)
+      pca_inicial <- pca_umc_reporte_b(data, corr = "poly", puntajes = puntajes)
+      return(pca_inicial)
 
     }
 
   }
 
-  cfa_inicial <- reporte_lavaan(mod1, puntajes = puntajes)
-  return(cfa_inicial)
+  pca_inicial <- pca_umc_reporte_b(data, corr = "poly", puntajes = puntajes)
+  return(pca_inicial)
 
 
 }
 
 
+pca_recursivo(data = drop_na(bd1), recursivo = TRUE, puntajes = FALSE)
+
+#****************************************************************************************************************
+#*
+#*
+#*
+#*
+#*
+
+
+
+
+bd1
+
+cor_pol <- psych::polychoric(bd1)$rho
+ee <- eigen(cor_pol, symmetric = FALSE)
+
+#calculamos varianza (val), cargas (l), pesos (w)
+val <- ee$values
+val_sq <- sqrt(val) #desviacion
+l <- ee$vectors %*% diag(val_sq)
+w <- ee$vectors %*% diag(1/val_sq)
+
+cargas <- data.frame(Item = names(bd1), Pesos = w[, 1], Cargas = l[, 1])
+varex <- val[1]/sum(val)*100
+
+
+pca_1 <- function(x){
+
+  #if(sum(sapply(x, function(xx) sum(is.na(xx)))) > 0) stop("Es preferible que no hayan NAs en las columnas =)")
+
+  cor_pol <- psych::polychoric(x)$rho
+  ee <- eigen(cor_pol, symmetric = FALSE)
+
+  #calculamos varianza (val), cargas (l), pesos (w)
+  val <- ee$values
+  val_sq <- sqrt(val) #desviacion
+  l <- ee$vectors %*% diag(val_sq)
+  w <- ee$vectors %*% diag(1/val_sq)
+
+  cargas <- data.frame(Item = names(x), Pesos = w[, 1], Cargas = l[, 1])
+  varex <- val[1]/sum(val)
+
+  return(list(cargas = cargas, varex = varex))
+
+}
+
+pca_1(drop_na(bd1))
 
 
 
 
 
+
+
+pca_umc_reporte_b <- function(x, corr = NULL, puntajes = TRUE){
+
+  #if(sum(sapply(x, function(xx) sum(is.na(xx)))) > 0) stop("Es preferible que no hayan NAs en las columnas =)")
+
+  if(is.null(corr)){
+    ee <- eigen(cor(x), symmetric = FALSE) # symmetric=FALSE previene cargas negativas [espero]
+  }else{
+    cor_pol <- psych::polychoric(x)$rho
+    ee <- eigen(cor_pol, symmetric = FALSE)
+  }
+
+  #calculamos varianza (val), cargas (l), pesos (w)
+  val <- ee$values
+  val_sq <- sqrt(val) #desviacion
+  l <- ee$vectors %*% diag(val_sq)
+  w <- ee$vectors %*% diag(1/val_sq)
+
+  if(puntajes == TRUE){
+    z <- as.matrix(scale(x)) # datos estandarizados y matrix
+    s <- z %*% l # datos estandarizados por sus cargas
+    s <- scale(s)
+  }
+
+  cargas <- data.frame(Item = names(x), Pesos = w[, 1], Cargas = l[, 1])
+  vr <- c("Pesos", "Cargas")
+  cargas[vr] <- apply(cargas[vr], 2, function(x) format(round(x, 3), decimal.mark = ","))
+  varex <- format(round(val[1]/sum(val)*100, 2), decimal.mark = ",")
+
+  if(puntajes == TRUE){
+    return(list(puntajes = s[, 1], indicadores = varex, cargas = cargas))}
+  else {
+    return(list(indicadores = varex, cargas = cargas))}
+
+}
 
 
 
